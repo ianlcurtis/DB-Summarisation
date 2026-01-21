@@ -2,6 +2,9 @@
 
 A project for managing and summarising patient medical history data using SQL Server.
 
+## Options
+![HLArch](img/HLArch.png)
+
 ## Prerequisites
 
 - [Visual Studio Code](https://code.visualstudio.com/)
@@ -79,7 +82,7 @@ To confirm the tables were created successfully:
 
 ## MCP Server for Copilot Integration
 
-This project includes a Model Context Protocol (MCP) server that allows GitHub Copilot to query patient medical history data.
+This project includes a Model Context Protocol (MCP) server that allows GitHub Copilot to query patient medical history data. The server uses HTTP/SSE transport, making it suitable for both local development and cloud deployment.
 
 ### Building the MCP Server
 
@@ -87,6 +90,20 @@ This project includes a Model Context Protocol (MCP) server that allows GitHub C
 cd src/MedicalDbMcpServer
 dotnet build
 ```
+
+### Running the MCP Server
+
+```bash
+cd src/MedicalDbMcpServer
+
+# Using environment variable (ASP.NET Core format)
+ConnectionStrings__MedicalDb='Server=db;Database=PatientMedicalHistory;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True' dotnet run
+
+# Or using the legacy environment variable
+MEDICAL_DB_CONNECTION_STRING='Server=db;Database=PatientMedicalHistory;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True' dotnet run
+```
+
+The server will start on `http://localhost:8080` with the MCP endpoint at `/mcp`.
 
 ### Available Tools
 
@@ -99,9 +116,11 @@ The MCP server exposes two read-only tools:
 
 ### Testing with Copilot
 
-1. **Reload VS Code** after opening the project (Ctrl+Shift+P → "Developer: Reload Window") to register the MCP server from `.vscode/mcp.json`
+1. **Start the MCP server** in a terminal (see above)
 
-2. **Ask Copilot** to query patient data:
+2. **Reload VS Code** after opening the project (Ctrl+Shift+P → "Developer: Reload Window") to register the MCP server from `.vscode/mcp.json`
+
+3. **Ask Copilot** to query patient data:
    - "Get the medical history for patient 1"
    - "What are patient 4's medical conditions?"
    - "Show me patient 2's records between 2015-01-01 and 2020-12-31"
