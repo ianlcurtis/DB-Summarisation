@@ -1,0 +1,40 @@
+{
+    "name": "C# .NET with SQL Server",
+    "dockerComposeFile": "docker-compose.yml",
+    "service": "app",
+    "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+    "features": {
+        "ghcr.io/devcontainers/features/dotnet:2": {
+            "version": "8.0"
+        }
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-dotnettools.csharp",
+                "ms-dotnettools.csdevkit",
+                "ms-mssql.mssql",
+                "ms-mssql.sql-database-projects-vscode"
+            ],
+            "settings": {
+                "mssql.connections": [
+                    {
+                        "server": "db",
+                        "database": "master",
+                        "authenticationType": "SqlLogin",
+                        "user": "sa",
+                        "password": "YourStrong@Passw0rd",
+                        "savePassword": true,
+                        "profileName": "Local SQL Server"
+                    }
+                ]
+            }
+        }
+    },
+    "forwardPorts": [1433],
+    "postCreateCommand": "dotnet --version",
+    "remoteEnv": {
+        "MSSQL_SA_PASSWORD": "YourStrong@Passw0rd",
+        "MSSQL_CONNECTION_STRING": "Server=db;Database=master;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;"
+    }
+}

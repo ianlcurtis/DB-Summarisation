@@ -1,0 +1,16 @@
+{
+    "servers": {
+        "medical-db-mcp-server": {
+            "type": "stdio",
+            "command": "dotnet",
+            "args": [
+                "run",
+                "--project",
+                "${workspaceFolder}/src/MedicalDbMcpServer/MedicalDbMcpServer.csproj"
+            ],
+            "env": {
+                "MEDICAL_DB_CONNECTION_STRING": "Server=db;Database=PatientMedicalHistory;User Id=mcp_readonly_user;Password=YourSecurePassword123!;TrustServerCertificate=true;"
+            }
+        }
+    }
+}
