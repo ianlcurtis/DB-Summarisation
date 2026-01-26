@@ -1,0 +1,92 @@
+### MedicalAgent API Tests
+### Use REST Client extension (humao.rest-client) to execute these requests
+
+@baseUrl = http://localhost:5200
+
+### ============================================
+### Health Check Endpoints
+### ============================================
+
+### Check if the API is alive
+GET {{baseUrl}}/alive
+Accept: application/json
+
+###
+
+### Check if the API is ready (includes MCP server health)
+GET {{baseUrl}}/health
+Accept: application/json
+
+###
+
+### ============================================
+### Chat API Endpoints
+### ============================================
+
+### Get complete medical history for a patient
+POST {{baseUrl}}/api/chat
+Content-Type: application/json
+
+{
+    "message": "What is the complete medical history for patient 1?"
+}
+
+###
+
+### Query specific patient medications
+POST {{baseUrl}}/api/chat
+Content-Type: application/json
+
+{
+    "message": "What medications is patient 2 currently taking?"
+}
+
+###
+
+### Query patient conditions
+POST {{baseUrl}}/api/chat
+Content-Type: application/json
+
+{
+    "message": "What medical conditions does patient 1 have?"
+}
+
+###
+
+### Query patient allergies
+POST {{baseUrl}}/api/chat
+Content-Type: application/json
+
+{
+    "message": "Does patient 3 have any known allergies?"
+}
+
+###
+
+### Query lab results with date range
+POST {{baseUrl}}/api/chat
+Content-Type: application/json
+
+{
+    "message": "Show me patient 1's lab results from January 2024 to December 2024"
+}
+
+###
+
+### Query recent visits
+POST {{baseUrl}}/api/chat
+Content-Type: application/json
+
+{
+    "message": "What were the recent medical visits for patient 2?"
+}
+
+###
+
+### Ask without patient ID (should prompt for clarification)
+POST {{baseUrl}}/api/chat
+Content-Type: application/json
+
+{
+    "message": "What is the patient's blood pressure?"
+}

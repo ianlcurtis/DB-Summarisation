@@ -7,9 +7,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="ModelContextProtocol" Version="0.2.0-preview.1" />
-    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="0.2.0-preview.1" />
+    <PackageReference Include="ModelContextProtocol" Version="0.6.0-preview.1" />
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="0.6.0-preview.1" />
     <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MedicalAgent.ServiceDefaults\MedicalAgent.ServiceDefaults.csproj" />
   </ItemGroup>
 
 </Project>

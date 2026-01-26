@@ -45,14 +45,27 @@ The MCP server is pre-configured in `.vscode/mcp.json`. Reload VS Code (`Ctrl+Sh
 | `GetPatientMedicalHistory` | Complete medical history for a patient |
 | `GetPatientMedicalHistoryBetweenDates` | Medical history filtered by date range |
 
-## Running Manually
+## Running the Aspire App
+
+```bash
+# Configure Azure OpenAI (one-time)
+cd src/MedicalAgent.AppHost
+dotnet user-secrets set "ConnectionStrings:openai" "Endpoint=https://<your-resource>.openai.azure.com/;Key=<your-key>"
+
+# Run (from solution root)
+dotnet run --project src/MedicalAgent.AppHost
+```
+
+Chat API: `POST http://localhost:5000/api/chat` with `{"message": "your query"}`
+
+## Running MCP Server Only
 
 ```bash
 cd src/MedicalDbMcpServer
 dotnet run
 ```
 
-For HTTP transport (cloud deployment), the server runs on `http://localhost:8080/mcp`.
+HTTP transport available at `http://localhost:8080/mcp`.
 
 ## License
 

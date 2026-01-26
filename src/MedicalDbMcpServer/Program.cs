@@ -42,6 +42,9 @@ else
     // HTTP transport for cloud/container deployment
     var builder = WebApplication.CreateBuilder(args);
 
+    // Add Aspire service defaults (telemetry, health checks, service discovery)
+    builder.AddServiceDefaults();
+
     var connectionString = builder.Configuration.GetConnectionString("MedicalDb")
         ?? Environment.GetEnvironmentVariable("MEDICAL_DB_CONNECTION_STRING")
         ?? throw new InvalidOperationException("Connection string not configured. Set 'ConnectionStrings:MedicalDb' or 'MEDICAL_DB_CONNECTION_STRING' environment variable.");
@@ -54,6 +57,9 @@ else
         .WithTools<PatientHistoryTools>();
 
     var app = builder.Build();
+
+    // Map Aspire health check endpoints
+    app.MapDefaultEndpoints();
 
     app.MapMcp();
 

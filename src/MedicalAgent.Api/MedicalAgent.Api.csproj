@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Aspire integrations -->
+    <PackageReference Include="Aspire.Azure.AI.OpenAI" Version="9.2.1-preview.1.25222.1" />
+    
+    <!-- Microsoft.Extensions.AI for agent/chat abstractions - align with ModelContextProtocol dependencies -->
+    <PackageReference Include="Microsoft.Extensions.AI" Version="9.5.0" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="9.6.0-preview.1.25310.2" />
+    
+    <!-- MCP client for connecting to MedicalDbMcpServer -->
+    <PackageReference Include="ModelContextProtocol" Version="0.6.0-preview.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MedicalAgent.ServiceDefaults\MedicalAgent.ServiceDefaults.csproj" />
+  </ItemGroup>
+
+</Project>
