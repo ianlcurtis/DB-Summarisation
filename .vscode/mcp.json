@@ -6,10 +6,12 @@
             "args": [
                 "run",
                 "--project",
-                "${workspaceFolder}/src/MedicalDbMcpServer/MedicalDbMcpServer.csproj"
+                "${workspaceFolder}/src/MedicalDbMcpServer/MedicalDbMcpServer.csproj",
+                "--",
+                "--stdio"
             ],
             "env": {
-                "MEDICAL_DB_CONNECTION_STRING": "Server=db;Database=PatientMedicalHistory;User Id=mcp_readonly_user;Password=YourSecurePassword123!;TrustServerCertificate=true;"
+                "MEDICAL_DB_CONNECTION_STRING": "Server=localhost;Database=PatientMedicalHistory;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;"
             }
         }
     }
