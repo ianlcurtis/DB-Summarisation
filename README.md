@@ -57,6 +57,23 @@ dotnet user-secrets set "ConnectionStrings:openai" "Endpoint=https://<your-resou
 dotnet run --project src/MedicalAgent.AppHost
 ```
 
+### Aspire Dashboard
+
+When the app starts, the dashboard URL appears in the console (typically `https://localhost:17178`). The dashboard provides:
+
+- **Resources** - View status of all services (MedicalAgent.Api, MedicalDbMcpServer)
+- **Console** - Live logs from each service
+- **Traces** - Distributed tracing across services
+- **Metrics** - Performance metrics and health status
+
+### Service URLs
+
+| Service | URL |
+|---------|-----|
+| Aspire Dashboard | `https://localhost:17178` |
+| Medical Agent API | `http://localhost:5000` |
+| MCP Server | `http://localhost:8080/mcp` |
+
 Chat API: `POST http://localhost:5000/api/chat` with `{"message": "your query"}`
 
 For a quick test, use [api-tests.http](src/MedicalAgent.Api/api-tests.http) in VS Code with the REST Client extension.
