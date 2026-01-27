@@ -39,6 +39,23 @@ The MCP server is pre-configured in `.vscode/mcp.json`. Reload VS Code (`Ctrl+Sh
 - "Show patient 3's medications"
 - "What are patient 5's lab results between 2020-01-01 and 2023-12-31?"
 
+### 4. Run the Aspire App (Optional)
+
+Configure your Azure OpenAI connection:
+
+```bash
+cd src/MedicalAgent.AppHost
+dotnet user-secrets set "ConnectionStrings:openai" "Endpoint=https://<your-resource>.openai.azure.com/;Key=<your-key>"
+```
+
+Run the application:
+
+```bash
+dotnet run
+```
+
+The Aspire Dashboard URL appears in the console where you can view service status, logs, and traces.
+
 ## Available MCP Tools
 
 | Tool | Description |
@@ -48,21 +65,11 @@ The MCP server is pre-configured in `.vscode/mcp.json`. Reload VS Code (`Ctrl+Sh
 
 ## Configuration
 
-### Required Settings
-
-| Setting | Location | Description |
-|---------|----------|-------------|
-| SQL Server Connection | `appsettings.json` | Database connection string (pre-configured for dev container) |
-| Azure OpenAI Connection | User Secrets | Required for Aspire app - endpoint and API key |
-| Azure OpenAI Deployment | `appsettings.json` | Model deployment name (default: `gpt-4o`) |
-
 ### SQL Server Connection String
 
-The database connection is pre-configured for the dev container environment:
-
-**Dev Container (default):**
-- AppHost uses server name `db` (the container name)
-- MCP Server standalone uses `localhost`
+The database connection is pre-configured for the dev container:
+- **AppHost**: Uses server name `db` (the container name)
+- **MCP Server standalone**: Uses `localhost`
 
 If running outside the dev container, update `ConnectionStrings:MedicalDb` in the appropriate `appsettings.json`:
 
@@ -74,18 +81,11 @@ If running outside the dev container, update `ConnectionStrings:MedicalDb` in th
 }
 ```
 
-### Azure OpenAI Configuration (Required for Aspire App)
+### Azure OpenAI Configuration (Aspire App Only)
 
-1. **Set the connection string** (includes endpoint and key):
+The Aspire app requires Azure OpenAI. Configure via user secrets (see [Step 4](#4-run-the-aspire-app-optional)).
 
-```bash
-cd src/MedicalAgent.AppHost
-dotnet user-secrets set "ConnectionStrings:openai" "Endpoint=https://<your-resource>.openai.azure.com/;Key=<your-key>"
-```
-
-2. **Set the deployment name** (optional - defaults to `gpt-4o`):
-
-Edit `src/MedicalAgent.Api/appsettings.json`:
+To change the deployment name (defaults to `gpt-4o`), edit `src/MedicalAgent.Api/appsettings.json`:
 
 ```json
 {
@@ -99,50 +99,25 @@ Edit `src/MedicalAgent.Api/appsettings.json`:
 
 ### MCP Server Configuration for Copilot
 
-The MCP server is pre-configured in `.vscode/mcp.json` for use with GitHub Copilot:
+The MCP server is pre-configured in `.vscode/mcp.json`. Update `MEDICAL_DB_CONNECTION_STRING` if your database connection differs.
 
-```jsonc
-{
-  "servers": {
-    "medical-db-mcp-server": {
-      "type": "stdio",
-      "command": "dotnet",
-      "args": ["run", "--project", "${workspaceFolder}/src/MedicalDbMcpServer/MedicalDbMcpServer.csproj", "--", "--stdio"],
-      "env": {
-        "MEDICAL_DB_CONNECTION_STRING": "Server=localhost;Database=PatientMedicalHistory;..."
-      }
-    }
-  }
-}
-```
+## Aspire Dashboard
 
-Update `MEDICAL_DB_CONNECTION_STRING` if your database connection differs from the default.
-
-## Running the Aspire App
-
-```bash
-# Run (from solution root)
-dotnet run --project src/MedicalAgent.AppHost
-```
-
-### Aspire Dashboard
-
-When the app starts, the dashboard URL appears in the console (typically `https://localhost:17178`). The dashboard provides:
+When the Aspire app starts, the dashboard URL appears in the console. The dashboard provides:
 
 - **Resources** - View status of all services (MedicalAgent.Api, MedicalDbMcpServer)
 - **Console** - Live logs from each service
 - **Traces** - Distributed tracing across services
 - **Metrics** - Performance metrics and health status
 
-### Service URLs
+### Service Endpoints
 
 | Service | URL |
 |---------|-----|
-| Aspire Dashboard | `https://localhost:17178` |
 | Medical Agent API | `http://localhost:5000` |
 | MCP Server | `http://localhost:8080/mcp` |
 
-Chat API: `POST http://localhost:5000/api/chat` with `{"message": "your query"}`
+**Chat API**: `POST http://localhost:5000/api/chat` with `{"message": "your query"}`
 
 For a quick test, use [api-tests.http](src/MedicalAgent.Api/api-tests.http) in VS Code with the REST Client extension.
 
