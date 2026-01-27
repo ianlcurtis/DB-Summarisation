@@ -1,6 +1,6 @@
 # DB-Summarisation
 
-MCP server that exposes patient medical history from SQL Server to AI assistants like GitHub Copilot.
+.NET Aspire application featuring an MCP server that exposes patient medical history from SQL Server to AI assistants like GitHub Copilot, with an Agent Framework-based API for querying medical data.
 
 ## Options
 Below are a few options for achieving the goal, this repo demonstrates the Agent Framework option. Detailed comments about the Agent Framework implementation can be found in the code. 
