@@ -3,7 +3,8 @@
 MCP server that exposes patient medical history from SQL Server to AI assistants like GitHub Copilot.
 
 ## Options
-Below are a few options for achieving the goal, this repo demonstrates the Agent Framework option.
+Below are a few options for achieving the goal, this repo demonstrates the Agent Framework option. Detailed comments about the Agent Framework implementation can be found in the code. 
+> Note: This is a simple use case that could be achieved without the Agent Framework. I'm using it here as a demonstration.
 ![HLArch](img/HLArch.png)
 
 ## Prerequisites
@@ -57,6 +58,8 @@ dotnet run --project src/MedicalAgent.AppHost
 ```
 
 Chat API: `POST http://localhost:5000/api/chat` with `{"message": "your query"}`
+
+For a quick test, use [api-tests.http](src/MedicalAgent.Api/api-tests.http) in VS Code with the REST Client extension.
 
 ## Running MCP Server Only
 

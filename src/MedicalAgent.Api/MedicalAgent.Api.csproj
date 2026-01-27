@@ -9,10 +9,15 @@
   <ItemGroup>
     <!-- Aspire integrations -->
     <PackageReference Include="Aspire.Azure.AI.OpenAI" Version="9.2.1-preview.1.25222.1" />
+    <PackageReference Include="Microsoft.Agents.AI" Version="1.0.0-preview.260121.1" />
     
     <!-- Microsoft.Extensions.AI for agent/chat abstractions - align with ModelContextProtocol dependencies -->
-    <PackageReference Include="Microsoft.Extensions.AI" Version="9.5.0" />
-    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="9.6.0-preview.1.25310.2" />
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.2.0" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.2.0-preview.1.26063.2" />
+    
+    <!-- Pin OpenAI packages to compatible versions to avoid TypeLoadException -->
+    <PackageReference Include="Azure.AI.OpenAI" Version="2.8.0-beta.1" />
+    <PackageReference Include="OpenAI" Version="2.8.0" />
     
     <!-- MCP client for connecting to MedicalDbMcpServer -->
     <PackageReference Include="ModelContextProtocol" Version="0.6.0-preview.1" />
