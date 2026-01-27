@@ -46,13 +46,81 @@ The MCP server is pre-configured in `.vscode/mcp.json`. Reload VS Code (`Ctrl+Sh
 | `GetPatientMedicalHistory` | Complete medical history for a patient |
 | `GetPatientMedicalHistoryBetweenDates` | Medical history filtered by date range |
 
+## Configuration
+
+### Required Settings
+
+| Setting | Location | Description |
+|---------|----------|-------------|
+| SQL Server Connection | `appsettings.json` | Database connection string (pre-configured for dev container) |
+| Azure OpenAI Connection | User Secrets | Required for Aspire app - endpoint and API key |
+| Azure OpenAI Deployment | `appsettings.json` | Model deployment name (default: `gpt-4o`) |
+
+### SQL Server Connection String
+
+The database connection is pre-configured for the dev container environment:
+
+**Dev Container (default):**
+- AppHost uses server name `db` (the container name)
+- MCP Server standalone uses `localhost`
+
+If running outside the dev container, update `ConnectionStrings:MedicalDb` in the appropriate `appsettings.json`:
+
+```json
+{
+  "ConnectionStrings": {
+    "MedicalDb": "Server=<your-server>;Database=PatientMedicalHistory;User Id=sa;Password=<your-password>;TrustServerCertificate=True;"
+  }
+}
+```
+
+### Azure OpenAI Configuration (Required for Aspire App)
+
+1. **Set the connection string** (includes endpoint and key):
+
+```bash
+cd src/MedicalAgent.AppHost
+dotnet user-secrets set "ConnectionStrings:openai" "Endpoint=https://<your-resource>.openai.azure.com/;Key=<your-key>"
+```
+
+2. **Set the deployment name** (optional - defaults to `gpt-4o`):
+
+Edit `src/MedicalAgent.Api/appsettings.json`:
+
+```json
+{
+  "Azure": {
+    "OpenAI": {
+      "DeploymentName": "your-deployment-name"
+    }
+  }
+}
+```
+
+### MCP Server Configuration for Copilot
+
+The MCP server is pre-configured in `.vscode/mcp.json` for use with GitHub Copilot:
+
+```jsonc
+{
+  "servers": {
+    "medical-db-mcp-server": {
+      "type": "stdio",
+      "command": "dotnet",
+      "args": ["run", "--project", "${workspaceFolder}/src/MedicalDbMcpServer/MedicalDbMcpServer.csproj", "--", "--stdio"],
+      "env": {
+        "MEDICAL_DB_CONNECTION_STRING": "Server=localhost;Database=PatientMedicalHistory;..."
+      }
+    }
+  }
+}
+```
+
+Update `MEDICAL_DB_CONNECTION_STRING` if your database connection differs from the default.
+
 ## Running the Aspire App
 
 ```bash
-# Configure Azure OpenAI (one-time)
-cd src/MedicalAgent.AppHost
-dotnet user-secrets set "ConnectionStrings:openai" "Endpoint=https://<your-resource>.openai.azure.com/;Key=<your-key>"
-
 # Run (from solution root)
 dotnet run --project src/MedicalAgent.AppHost
 ```
