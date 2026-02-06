@@ -2,6 +2,34 @@
 
 .NET Aspire application featuring an MCP server that exposes patient medical history from SQL Server to AI assistants like GitHub Copilot, with an Agent Framework-based API for querying medical data.
 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fianlcurtis%2FDB-Summarisation%2Fmain%2Finfra%2Fazuredeploy.bicep)
+
+## Deploy to Azure
+
+The button above deploys all required Azure infrastructure and applications automatically:
+
+| Resource | Description |
+|----------|-------------|
+| Azure Container Registry | Hosts container images |
+| Azure SQL Server + Database | Patient medical history data (Entra-only auth) |
+| Azure OpenAI + GPT-4o | AI model for the agent |
+| Container Apps Environment | Hosts the application containers |
+| Log Analytics Workspace | Monitoring and diagnostics |
+| MCP Server Container App | Exposes patient data via MCP protocol |
+| Agent API Container App | AI agent endpoint for queries |
+
+**Automated post-deployment scripts:**
+- Database schema and sample data are created automatically
+- Container images are built from GitHub and pushed to ACR
+- Container apps are deployed with proper configuration
+- SQL database access is granted to the MCP Server managed identity
+
+**Required parameters:**
+- `sqlAdminObjectId` - Your Entra user/group Object ID (find via `az ad signed-in-user show --query id`)
+- `sqlAdminDisplayName` - Your Entra display name
+
+**After deployment**, access the Agent API at the URL shown in the deployment outputs (`agentApiUrl`).
+
 ## Options
 Below are a few options for achieving the goal, this repo demonstrates the Agent Framework option. Detailed comments about the Agent Framework implementation can be found in the code. 
 > Note: This is a simple use case that could be achieved without the Agent Framework. I'm using it here as a demonstration.

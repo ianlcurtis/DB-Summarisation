@@ -1,248 +1,141 @@
-# C# .NET Coding Standards
+# Coding Standards
 
-## Naming Conventions
+## C# .NET
 
-- **PascalCase** for class names, method names, properties, and public members
-- **camelCase** for local variables and private fields
-- **_camelCase** (underscore prefix) for private fields
-- **IPascalCase** (I prefix) for interfaces
-- **TPascalCase** (T prefix) for generic type parameters
-- Use meaningful, descriptive names that reveal intent
+### Naming
+- **PascalCase**: classes, methods, properties, public members
+- **camelCase**: local variables
+- **_camelCase**: private fields
+- **I** prefix for interfaces, **T** prefix for generic type parameters
 
-```csharp
-public class CustomerService
-{
-    private readonly ILogger _logger;
-    private int _retryCount;
+### Code Organization
+- One class per file, filename matches class name
+- Namespaces match folder structure
+- Member order: fields → constructors → properties → methods
+- Use file-scoped namespaces
 
-    public string CustomerName { get; set; }
-
-    public async Task<Customer> GetCustomerAsync(int customerId)
-    {
-        var customer = await _repository.FindAsync(customerId);
-        return customer;
-    }
-}
-```
-
-## Code Organization
-
-- One class per file
-- File name should match the class name
-- Organize namespaces to match folder structure
-- Order class members: fields, constructors, properties, methods
-- Group related methods together
-
-## Async/Await
-
-- Use `async`/`await` for all I/O-bound operations
+### Async/Await
+- Use `async`/`await` for all I/O operations
 - Suffix async methods with `Async`
-- Prefer `Task<T>` over `Task` when returning values
 - Avoid `async void` except for event handlers
 - Use `ConfigureAwait(false)` in library code
 
-```csharp
-public async Task<Data> FetchDataAsync(CancellationToken cancellationToken = default)
-{
-    var response = await _httpClient.GetAsync(url, cancellationToken).ConfigureAwait(false);
-    return await response.Content.ReadFromJsonAsync<Data>(cancellationToken).ConfigureAwait(false);
-}
-```
-
-## Null Handling
-
-- Enable nullable reference types (`<Nullable>enable</Nullable>`)
+### Null Handling
+- Enable nullable reference types
 - Use null-conditional operators (`?.`, `??`, `??=`)
-- Prefer pattern matching for null checks
-- Use `ArgumentNullException.ThrowIfNull()` for parameter validation
+- Use `ArgumentNullException.ThrowIfNull()` for validation
 
-```csharp
-public void ProcessOrder(Order? order)
-{
-    ArgumentNullException.ThrowIfNull(order);
-    
-    var customerName = order.Customer?.Name ?? "Unknown";
-}
-```
-
-## LINQ Best Practices
-
+### LINQ
 - Prefer method syntax for complex queries
-- Use meaningful variable names in lambda expressions
-- Avoid multiple enumerations (use `.ToList()` or `.ToArray()` when needed)
+- Avoid multiple enumerations
 - Prefer `Any()` over `Count() > 0`
 
-```csharp
-var activeCustomers = customers
-    .Where(customer => customer.IsActive)
-    .OrderBy(customer => customer.LastName)
-    .Select(customer => new CustomerDto(customer.Id, customer.FullName))
-    .ToList();
-```
-
-## Exception Handling
-
+### Exception Handling
 - Catch specific exceptions, not `Exception`
-- Use exception filters when appropriate
 - Don't swallow exceptions silently
 - Include meaningful messages and context
-- Use custom exceptions for domain-specific errors
 
-```csharp
-try
-{
-    await ProcessPaymentAsync(payment);
-}
-catch (PaymentGatewayException ex) when (ex.IsRetryable)
-{
-    _logger.LogWarning(ex, "Retryable payment error for order {OrderId}", orderId);
-    throw new PaymentProcessingException($"Payment failed for order {orderId}", ex);
-}
-```
-
-## Dependency Injection
-
+### Dependency Injection
 - Use constructor injection for required dependencies
-- Register services with appropriate lifetimes (Singleton, Scoped, Transient)
 - Prefer interfaces over concrete implementations
 - Keep constructors simple (no logic)
 
-```csharp
-public class OrderService : IOrderService
-{
-    private readonly IOrderRepository _orderRepository;
-    private readonly ILogger<OrderService> _logger;
-
-    public OrderService(IOrderRepository orderRepository, ILogger<OrderService> logger)
-    {
-        _orderRepository = orderRepository;
-        _logger = logger;
-    }
-}
-```
-
-## Records and Immutability
-
+### Records & Collections
 - Use `record` types for DTOs and value objects
-- Prefer immutable objects where possible
-- Use `init` setters for properties that should only be set during initialization
-- Use `required` modifier for mandatory properties
+- Use `IReadOnlyList<T>` for immutable return types
+- Prefer collection expressions in C# 12+
 
-```csharp
-public record CustomerDto(int Id, string Name, string Email);
-
-public record CreateOrderRequest
-{
-    public required int CustomerId { get; init; }
-    public required List<OrderItem> Items { get; init; }
-}
-```
-
-## Collections
-
-- Use `IReadOnlyList<T>` or `IReadOnlyCollection<T>` for return types when collection shouldn't be modified
-- Use `List<T>` internally, expose as `IEnumerable<T>` or read-only interfaces
-- Prefer collection expressions (`[]`) in C# 12+
-- Initialize collections with capacity when size is known
-
-```csharp
-public IReadOnlyList<Product> GetProducts()
-{
-    List<Product> products = new(expectedCount);
-    // populate...
-    return products;
-}
-
-// C# 12+
-int[] numbers = [1, 2, 3, 4, 5];
-```
-
-## String Handling
-
-- Use string interpolation over concatenation
-- Use `StringBuilder` for multiple string operations
-- Use `StringComparison` for comparisons
-- Prefer `string.IsNullOrEmpty()` or `string.IsNullOrWhiteSpace()`
-
-```csharp
-var message = $"Hello, {customer.Name}! Your order #{orderId} is ready.";
-
-if (string.Equals(input, expected, StringComparison.OrdinalIgnoreCase))
-{
-    // ...
-}
-```
-
-## Documentation
-
-- Use XML documentation comments for public APIs
-- Document exceptions that can be thrown
-- Include examples for complex methods
-- Keep comments up-to-date with code changes
-
-```csharp
-/// <summary>
-/// Retrieves a customer by their unique identifier.
-/// </summary>
-/// <param name="customerId">The unique identifier of the customer.</param>
-/// <returns>The customer if found; otherwise, null.</returns>
-/// <exception cref="ArgumentOutOfRangeException">Thrown when customerId is less than 1.</exception>
-public async Task<Customer?> GetCustomerByIdAsync(int customerId)
-```
-
-## Testing
-
+### Testing
 - Follow AAA pattern (Arrange, Act, Assert)
-- Use descriptive test names: `MethodName_Scenario_ExpectedResult`
-- One assertion per test when practical
-- Use `FluentAssertions` for readable assertions
+- Naming: `MethodName_Scenario_ExpectedResult`
 - Mock external dependencies
 
-```csharp
-[Fact]
-public async Task GetCustomerByIdAsync_WithValidId_ReturnsCustomer()
-{
-    // Arrange
-    var expectedCustomer = new Customer { Id = 1, Name = "John" };
-    _mockRepository.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(expectedCustomer);
-
-    // Act
-    var result = await _sut.GetCustomerByIdAsync(1);
-
-    // Assert
-    result.Should().BeEquivalentTo(expectedCustomer);
-}
-```
-
-## Performance Considerations
-
+### Performance
 - Use `Span<T>` and `Memory<T>` for high-performance scenarios
-- Prefer `ValueTask<T>` for hot paths that often complete synchronously
-- Use object pooling for frequently allocated objects
-- Avoid boxing value types
 - Use `sealed` on classes that won't be inherited
+- Avoid boxing value types
 
-## File-Scoped Namespaces
+---
 
-Use file-scoped namespaces to reduce indentation:
+## React / TypeScript
 
-```csharp
-namespace MyProject.Services;
+### Component Structure
+- One component per file, filename matches component name
+- Use functional components with hooks
+- Keep components small and focused (single responsibility)
 
-public class CustomerService
-{
-    // ...
-}
-```
+### Naming
+- **PascalCase**: components, types, interfaces
+- **camelCase**: functions, variables, props, hooks
+- **use** prefix for custom hooks
 
-## Project Structure
+### State Management
+- Prefer `useState` for local state
+- Use `useReducer` for complex state logic
+- Lift state only when necessary
 
-```
-/src
-  /ProjectName.Api          # API/Web layer
-  /ProjectName.Core         # Domain/Business logic
-  /ProjectName.Infrastructure   # Data access, external services
-/tests
-  /ProjectName.UnitTests
-  /ProjectName.IntegrationTests
-```
+### Hooks
+- Follow Rules of Hooks (top-level only, React functions only)
+- Use `useMemo` and `useCallback` for expensive computations
+- Always include proper dependency arrays
+
+### Props
+- Define explicit TypeScript interfaces for props
+- Use destructuring in function parameters
+- Provide default values where appropriate
+
+### Styling
+- Use CSS modules or styled-components
+- Avoid inline styles except for dynamic values
+- Keep styles co-located with components
+
+### Performance
+- Use `React.memo` for expensive pure components
+- Avoid anonymous functions in JSX when possible
+- Use lazy loading for routes and heavy components
+
+### Testing
+- Use React Testing Library
+- Test behavior, not implementation details
+- Mock external dependencies and API calls
+
+---
+
+## SQL
+
+### Naming
+- **snake_case** or **PascalCase** consistently for tables and columns
+- Singular nouns for table names (e.g., `patient`, not `patients`)
+- Prefix views with `vw_`, stored procedures with `sp_`, functions with `fn_`
+
+### Formatting
+- UPPERCASE for SQL keywords (`SELECT`, `FROM`, `WHERE`)
+- One clause per line for readability
+- Indent subqueries and joined tables
+
+### Query Best Practices
+- Always specify column names (avoid `SELECT *`)
+- Use table aliases for multi-table queries
+- Prefer `JOIN` syntax over comma-separated tables
+- Use parameterized queries to prevent SQL injection
+
+### Indexing
+- Index columns used in `WHERE`, `JOIN`, and `ORDER BY`
+- Avoid over-indexing (impacts write performance)
+- Use covering indexes for frequently queried columns
+
+### Performance
+- Avoid functions on indexed columns in `WHERE` clauses
+- Use `EXISTS` instead of `IN` for subqueries when appropriate
+- Limit result sets with `TOP` or `OFFSET/FETCH`
+- Avoid `SELECT DISTINCT` when possible
+
+### Data Integrity
+- Define primary keys on all tables
+- Use foreign keys to enforce referential integrity
+- Apply appropriate constraints (`NOT NULL`, `CHECK`, `UNIQUE`)
+
+### Transactions
+- Use explicit transactions for multi-statement operations
+- Keep transactions as short as possible
+- Always include error handling with `TRY/CATCH`
