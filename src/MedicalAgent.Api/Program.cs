@@ -27,6 +27,22 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
 
 // =============================================================================
+// CORS CONFIGURATION
+// =============================================================================
+// Enable CORS for the React frontend. In development, the frontend runs on
+// a different port. Aspire provides service discovery but we need CORS
+// to allow cross-origin requests from the browser.
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
+});
+
+// =============================================================================
 // AZURE OPENAI INTEGRATION
 // =============================================================================
 // AddAzureOpenAIClient reads the connection string injected by Aspire AppHost.
@@ -80,6 +96,13 @@ builder.Services.AddHealthChecks()
     .AddCheck<McpServerHealthCheck>("mcp-server", tags: ["ready"]);
 
 var app = builder.Build();
+
+// =============================================================================
+// CORS MIDDLEWARE
+// =============================================================================
+// Enable CORS before other middleware to allow cross-origin requests
+// from the React frontend.
+app.UseCors();
 
 // =============================================================================
 // ASPIRE HEALTH ENDPOINTS

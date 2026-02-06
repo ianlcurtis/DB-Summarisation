@@ -10,18 +10,18 @@ A .NET Aspire orchestrated application that enables natural language queries aga
 │                    (Aspire Orchestrator)                        │
 └─────────────────────────────────────────────────────────────────┘
                               │
-         ┌────────────────────┼────────────────────┐
-         │                    │                    │
-         ▼                    ▼                    ▼
-┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
-│  SQL Server     │  │ MedicalDbMcp    │  │ MedicalAgent    │
-│  (MedicalDb)    │◄─┤ Server          │◄─┤ .Api            │
-│                 │  │ (MCP Tools)     │  │ (Chat Endpoint) │
-└─────────────────┘  └─────────────────┘  └─────────────────┘
-                              ▲                    │
-                              │                    │
-                    HTTP/SSE Transport      Azure OpenAI
-                    (Tool Invocation)       (gpt-4o)
+    ┌─────────────────────────┼─────────────────────────┐
+    │              │          │          │              │
+    ▼              ▼          ▼          ▼              ▼
+┌─────────┐ ┌───────────┐ ┌─────────┐ ┌─────────┐ ┌───────────┐
+│   SQL   │ │ MedicalDb │ │ Medical │ │  Azure  │ │  React    │
+│ Server  │◄┤ McpServer │◄┤ Agent   │─┤ OpenAI  │ │  Web UI   │
+│         │ │           │ │  .Api   │ │ (gpt-4o)│ │           │
+└─────────┘ └───────────┘ └─────────┘ └─────────┘ └───────────┘
+                 ▲              │                      │
+                 │              │                      │
+           HTTP/SSE         Chat API              Calls API
+        (MCP Protocol)      Endpoint             (via CORS)
 ```
 
 ## Projects
@@ -32,10 +32,12 @@ A .NET Aspire orchestrated application that enables natural language queries aga
 | `MedicalAgent.ServiceDefaults` | Shared configuration for OpenTelemetry, health checks, resilience |
 | `MedicalAgent.Api` | REST API with chat endpoint, AI agent using Azure OpenAI + MCP |
 | `MedicalDbMcpServer` | MCP server exposing patient database tools via HTTP/SSE |
+| `MedicalAgent.Web` | React frontend for the chat interface |
 
 ## Prerequisites
 
 - .NET 8.0 SDK
+- Node.js 20+ (for React frontend)
 - Docker (for SQL Server container)
 - Azure OpenAI resource with a deployed model (e.g., gpt-4o)
 - .NET Aspire workload: `dotnet workload install aspire`

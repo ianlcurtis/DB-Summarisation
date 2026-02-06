@@ -1,0 +1,28 @@
+server {
+    listen 80;
+    server_name localhost;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Gzip compression
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+
+    # Serve runtime config for the frontend BEFORE the catch-all
+    # This allows the React app to get the API URL at runtime
+    location = /config.js {
+        default_type application/javascript;
+        return 200 'window.APP_CONFIG = { API_URL: "${API_URL}" };';
+    }
+
+    # Cache static assets
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Handle client-side routing (SPA) - catch-all should be last
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

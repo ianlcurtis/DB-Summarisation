@@ -26,10 +26,12 @@
 
 using MedicalDbMcpServer.Data;
 using MedicalDbMcpServer.Tools;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Identity.Web;
 
 // ============================================================================
 // TRANSPORT SELECTION
@@ -122,12 +124,42 @@ else
     // This adds telemetry, health checks, and service discovery features
     builder.AddServiceDefaults();
 
-    // Get the database connection string
-    var connectionString = builder.Configuration.GetConnectionString("MedicalDb")
-        ?? Environment.GetEnvironmentVariable("MEDICAL_DB_CONNECTION_STRING")
-        ?? throw new InvalidOperationException("Connection string not configured. Set 'ConnectionStrings:MedicalDb' or 'MEDICAL_DB_CONNECTION_STRING' environment variable.");
+    // ========================================================================
+    // MICROSOFT ENTRA ID AUTHENTICATION (OPTIONAL)
+    // ========================================================================
+    // Configure JWT Bearer authentication with Microsoft Entra ID.
+    // Authentication is ONLY enabled if AzureAd configuration is present.
+    // For local development without auth, ensure AzureAd section is empty/missing.
+    // For production, provide AzureAd__TenantId, AzureAd__ClientId, AzureAd__Audience.
+    // ========================================================================
+    var azureAdSection = builder.Configuration.GetSection("AzureAd");
+    var isEntraAuthEnabled = !string.IsNullOrEmpty(azureAdSection["ClientId"]);
 
-    builder.Services.AddSingleton<IDbConnectionFactory>(new SqlConnectionFactory(connectionString));
+    if (isEntraAuthEnabled)
+    {
+        builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddMicrosoftIdentityWebApi(azureAdSection);
+        builder.Services.AddAuthorization();
+    }
+
+    // Get the database connection string (optional - allows startup without DB for health checks)
+    var connectionString = builder.Configuration.GetConnectionString("MedicalDb")
+        ?? Environment.GetEnvironmentVariable("MEDICAL_DB_CONNECTION_STRING");
+
+    // Register the database connection factory only if connection string is available
+    // This allows the /alive endpoint to work even when DB is not configured
+    if (!string.IsNullOrEmpty(connectionString))
+    {
+        builder.Services.AddSingleton<IDbConnectionFactory>(new SqlConnectionFactory(connectionString));
+        
+        // Add SQL Server health check so /health reflects database connectivity
+        builder.AddSqlServerHealthCheck(connectionString, "MedicalDb");
+    }
+    else
+    {
+        // Register a placeholder that will throw a helpful error if tools try to use it
+        builder.Services.AddSingleton<IDbConnectionFactory>(new NullConnectionFactory());
+    }
 
     // ========================================================================
     // MCP SERVER REGISTRATION (HTTP)
@@ -149,8 +181,38 @@ else
 
     var app = builder.Build();
 
+    // Enable authentication and authorization middleware (only if Entra auth is configured)
+    if (isEntraAuthEnabled)
+    {
+        app.UseAuthentication();
+        app.UseAuthorization();
+    }
+
     // Map Aspire health check endpoints (/health, /alive, etc.)
     app.MapDefaultEndpoints();
+
+    // ========================================================================
+    // SIMPLE STATUS ENDPOINT (DATABASE-INDEPENDENT)
+    // ========================================================================
+    // This endpoint provides a simple way to verify the MCP server is running
+    // and reachable without requiring database connectivity. Useful for:
+    // - Initial deployment testing to Azure
+    // - Quick connectivity verification
+    // Note: Use /health or /alive for load balancer health checks
+    // ========================================================================
+    app.MapGet("/status", () => Results.Ok(new 
+    { 
+        status = "alive",
+        service = "MedicalDbMcpServer",
+        timestamp = DateTime.UtcNow,
+        endpoints = new
+        {
+            mcp = "/sse",
+            health = "/health",
+            alive = "/alive",
+            status = "/status"
+        }
+    }));
 
     // ========================================================================
     // MAP THE MCP ENDPOINT
@@ -158,9 +220,20 @@ else
     // This exposes the MCP server at the default /mcp endpoint.
     // AI clients will send HTTP requests to: https://your-server/mcp
     //
+    // When Entra auth is enabled, RequireAuthorization() ensures only
+    // authenticated clients can access. Clients must include:
+    // Authorization: Bearer <access_token>
+    //
     // You can customise the path: app.MapMcp("/api/mcp");
     // ========================================================================
-    app.MapMcp();
+    if (isEntraAuthEnabled)
+    {
+        app.MapMcp().RequireAuthorization();
+    }
+    else
+    {
+        app.MapMcp();
+    }
 
     await app.RunAsync();
 }

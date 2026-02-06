@@ -53,7 +53,7 @@ var openai = builder.AddConnectionString("openai");
 // AGENT API PROJECT
 // =============================================================================
 // The main API that orchestrates AI queries using the MCP server's tools.
-builder.AddProject<Projects.MedicalAgent_Api>("agent-api")
+var agentApi = builder.AddProject<Projects.MedicalAgent_Api>("agent-api")
     // WithReference(mcpServer) enables SERVICE DISCOVERY:
     // The Agent API can reach the MCP server using the URL "http://mcp-server"
     // Aspire automatically resolves this to the actual endpoint at runtime.
@@ -67,6 +67,17 @@ builder.AddProject<Projects.MedicalAgent_Api>("agent-api")
     // the API might try to connect before the MCP server is available.
     // Dependencies are resolved in order: MedicalDb -> MCP Server -> Agent API
     .WaitFor(mcpServer);
+
+// =============================================================================
+// WEB FRONTEND PROJECT
+// =============================================================================
+// Add the React frontend as an npm app. Aspire will run npm dev and provide
+// service discovery so the frontend can call the API.
+builder.AddNpmApp("web-frontend", "../MedicalAgent.Web")
+    .WithReference(agentApi)
+    .WaitFor(agentApi)
+    .WithHttpEndpoint(env: "PORT")
+    .WithExternalHttpEndpoints();
 
 // =============================================================================
 // BUILD AND RUN

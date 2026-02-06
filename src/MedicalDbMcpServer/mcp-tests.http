@@ -1,0 +1,209 @@
+### MCP Server Health Check Tests
+### These endpoints are database-independent and useful for deployment verification
+
+### ==========================================================================
+### CONFIGURATION - Uncomment ONE baseUrl option
+### ==========================================================================
+
+### Local development (no authentication required)
+@baseUrl = http://localhost:5100
+
+### Azure deployment (authentication required - set token below)
+// @baseUrl = https://your-app.your-environment.your-region.azurecontainerapps.io
+
+### ==========================================================================
+### ENTRA ID CONFIGURATION
+### ==========================================================================
+@tenantId = 00000000-0000-0000-0000-000000000000
+@clientId = 00000000-0000-0000-0000-000000000000
+@scope = api://00000000-0000-0000-0000-000000000000/.default
+
+### ==========================================================================
+### STEP 1: GET ACCESS TOKEN (Device Code Flow)
+### ==========================================================================
+### Run this request first to get a device code. 
+### Then visit the URL shown and enter the code to authenticate.
+### After authentication, run Step 2 to get the actual token.
+### ==========================================================================
+
+### Step 1a: Request device code
+# @name deviceCodeRequest
+POST https://login.microsoftonline.com/{{tenantId}}/oauth2/v2.0/devicecode
+Content-Type: application/x-www-form-urlencoded
+
+client_id={{clientId}}&scope={{scope}}
+
+### Step 1b: Poll for token (run after completing device code flow in browser)
+### Replace DEVICE_CODE_HERE with the device_code from the response above
+# @name tokenRequest
+POST https://login.microsoftonline.com/{{tenantId}}/oauth2/v2.0/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=urn:ietf:params:oauth:grant-type:device_code&client_id={{clientId}}&device_code=DEVICE_CODE_HERE
+
+### ==========================================================================
+### STEP 2: PASTE YOUR TOKEN HERE
+### ==========================================================================
+### After getting the token from Step 1b, copy the access_token value here:
+### ==========================================================================
+
+@token = YOUR_ACCESS_TOKEN_HERE
+
+### Status Endpoint - Server Status
+# Returns service name, status, timestamp, and available endpoints
+GET {{baseUrl}}/status
+
+### Alive Endpoint - Liveness Probe
+# Minimal health check for Kubernetes/Azure liveness probes
+# Returns 200 OK if the server process is running
+GET {{baseUrl}}/alive
+
+### Health Endpoint - Readiness Probe  
+# Full health check for Kubernetes/Azure readiness probes
+# Returns 200 OK if all health checks pass (including database connectivity)
+# Returns 503 Service Unavailable if database is not accessible
+GET {{baseUrl}}/health
+
+### ==========================================================================
+### MCP Protocol Endpoint Tests (AUTHENTICATED)
+### Note: These require proper MCP JSON-RPC format
+### The MCP Streamable HTTP transport uses the root path /
+### IMPORTANT: Must include Accept header for both application/json and text/event-stream
+### IMPORTANT: For Azure endpoint, Authorization header with Bearer token is required
+### ==========================================================================
+
+### MCP Initialize - Required first call to establish session
+POST {{baseUrl}}/
+Content-Type: application/json
+Accept: application/json, text/event-stream
+Authorization: Bearer {{token}}
+
+{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+        "protocolVersion": "2024-11-05",
+        "capabilities": {},
+        "clientInfo": {
+            "name": "test-client",
+            "version": "1.0.0"
+        }
+    }
+}
+
+### List Available Tools
+# Returns all MCP tools exposed by this server
+POST {{baseUrl}}/
+Content-Type: application/json
+Accept: application/json, text/event-stream
+Authorization: Bearer {{token}}
+
+{
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "tools/list",
+    "params": {}
+}
+
+### ==========================================================================
+### MCP Tool Invocation Tests - Database Queries
+### These tests call the actual MCP tools to query patient data
+### ==========================================================================
+
+### Get Patient Medical History - Patient 1 (Emily Johnson)
+# Returns full medical history including conditions, medications, allergies, visits, lab results
+POST {{baseUrl}}/
+Content-Type: application/json
+Accept: application/json, text/event-stream
+Authorization: Bearer {{token}}
+
+{
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "tools/call",
+    "params": {
+        "name": "get_patient_medical_history",
+        "arguments": {
+            "patientId": 1
+        }
+    }
+}
+
+### Get Patient Medical History - Patient 8 (Michael Taylor - Complex Cardiac)
+# Patient with multiple chronic conditions: Atrial Fibrillation, Heart Failure, COPD
+POST {{baseUrl}}/
+Content-Type: application/json
+Accept: application/json, text/event-stream
+Authorization: Bearer {{token}}
+
+{
+    "jsonrpc": "2.0",
+    "id": 4,
+    "method": "tools/call",
+    "params": {
+        "name": "get_patient_medical_history",
+        "arguments": {
+            "patientId": 8
+        }
+    }
+}
+
+### Get Patient Medical History - Patient 4 (Robert Brown - Multiple Conditions)
+# Patient with Coronary Artery Disease, Diabetes, CKD, Hypertension
+POST {{baseUrl}}/
+Content-Type: application/json
+Accept: application/json, text/event-stream
+Authorization: Bearer {{token}}
+
+{
+    "jsonrpc": "2.0",
+    "id": 5,
+    "method": "tools/call",
+    "params": {
+        "name": "get_patient_medical_history",
+        "arguments": {
+            "patientId": 4
+        }
+    }
+}
+
+### Get Patient Medical History Between Dates - 2024 Records
+# Returns patient history filtered by date range
+POST {{baseUrl}}/
+Content-Type: application/json
+Accept: application/json, text/event-stream
+Authorization: Bearer {{token}}
+
+{
+    "jsonrpc": "2.0",
+    "id": 6,
+    "method": "tools/call",
+    "params": {
+        "name": "get_patient_medical_history_between_dates",
+        "arguments": {
+            "patientId": 1,
+            "startDate": "2024-01-01",
+            "endDate": "2024-12-31"
+        }
+    }
+}
+
+### Get Patient Medical History - Non-existent Patient
+# Should return empty/null result or error for patient that doesn't exist
+POST {{baseUrl}}/
+Content-Type: application/json
+Accept: application/json, text/event-stream
+Authorization: Bearer {{token}}
+
+{
+    "jsonrpc": "2.0",
+    "id": 7,
+    "method": "tools/call",
+    "params": {
+        "name": "get_patient_medical_history",
+        "arguments": {
+            "patientId": 999
+        }
+    }
+}

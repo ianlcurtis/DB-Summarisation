@@ -1,7 +1,11 @@
 ### MedicalAgent API Tests
 ### Use REST Client extension (humao.rest-client) to execute these requests
 
+### Local development
 @baseUrl = http://localhost:5200
+
+### Azure deployment
+# @baseUrl = https://your-app.your-environment.your-region.azurecontainerapps.io
 
 ### ============================================
 ### Health Check Endpoints

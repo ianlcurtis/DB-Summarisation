@@ -91,3 +91,15 @@ Desktop.ini
 .DS_Store
 .AppleDouble
 .LSOverride
+
+# Node.js / React / Vite (MedicalAgent.Web)
+node_modules/
+dist/
+dist-ssr/
+*.local
+.env
+.env.*
+!.env.example
+
+# Vite
+vite.config.ts.timestamp-*

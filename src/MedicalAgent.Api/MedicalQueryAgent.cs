@@ -56,6 +56,7 @@ public sealed class MedicalQueryAgent
     private readonly AzureOpenAIClient _openAiClient;
     private readonly string _deploymentName;
     private readonly MedicalMcpClientFactory _mcpFactory;
+    private readonly ILogger<MedicalQueryAgent> _logger;
     
     // AIAgent is the core abstraction in Microsoft Agent Framework.
     // It wraps an IChatClient and adds agent capabilities like:
@@ -64,6 +65,10 @@ public sealed class MedicalQueryAgent
     // - System instructions management
     // ⚠️ Note: AIAgent API is in preview and may change.
     private AIAgent? _agent;
+    
+    // Track which MCP connection generation this agent was created with.
+    // If the factory reconnects, we need to recreate the agent with fresh tools.
+    private long _agentConnectionGeneration = -1;
 
     // System prompt (instructions) that guides the AI's behavior.
     // These instructions are provided to the model with each invocation
@@ -84,10 +89,16 @@ public sealed class MedicalQueryAgent
     /// <param name="openAiClient">Azure OpenAI client for LLM inference</param>
     /// <param name="config">Configuration containing Azure OpenAI settings</param>
     /// <param name="mcpFactory">Factory for creating MCP client connections</param>
-    public MedicalQueryAgent(AzureOpenAIClient openAiClient, IConfiguration config, MedicalMcpClientFactory mcpFactory)
+    /// <param name="logger">Logger for diagnostic output</param>
+    public MedicalQueryAgent(
+        AzureOpenAIClient openAiClient, 
+        IConfiguration config, 
+        MedicalMcpClientFactory mcpFactory,
+        ILogger<MedicalQueryAgent> logger)
     {
         _openAiClient = openAiClient;
         _mcpFactory = mcpFactory;
+        _logger = logger;
 
         // Get deployment name from config (defaults to "gpt-4o")
         // This should be a model that supports function/tool calling
@@ -116,7 +127,17 @@ public sealed class MedicalQueryAgent
     /// </remarks>
     private async Task<AIAgent> GetAgentAsync(CancellationToken ct = default)
     {
-        // Return cached agent if already created
+        // Check if agent was created with a stale MCP connection
+        // If the factory reconnected, we need to recreate the agent with fresh tools
+        var currentGeneration = _mcpFactory.ConnectionGeneration;
+        if (_agent is not null && _agentConnectionGeneration != currentGeneration)
+        {
+            _logger.LogInformation("MCP connection generation changed ({OldGen} -> {NewGen}), invalidating cached agent",
+                _agentConnectionGeneration, currentGeneration);
+            _agent = null;
+        }
+        
+        // Return cached agent if already created and still valid
         // AIAgent instances are designed to be reused across multiple conversations.
         // Each conversation uses a separate AgentThread to maintain isolation.
         if (_agent is not null)
@@ -171,6 +192,10 @@ public sealed class MedicalQueryAgent
                 tools: [.. mcpTools.Cast<AITool>()]); // Tools the agent can invoke
         // Note: The spread operator [.. collection] creates a new collection from mcpTools.
         // MCP tools implement AITool, making them compatible with the Agent Framework.
+        
+        // Track which connection generation this agent was created with
+        _agentConnectionGeneration = currentGeneration;
+        _logger.LogInformation("Created new agent with MCP connection generation {Generation}", currentGeneration);
 
         return _agent;
     }
@@ -200,8 +225,60 @@ public sealed class MedicalQueryAgent
     /// history is preserved between calls. For multi-turn conversations where
     /// context should be maintained, use <see cref="QueryWithThreadAsync"/>.
     /// </para>
+    /// 
+    /// <para><b>Automatic Retry on Connection Failure:</b></para>
+    /// <para>
+    /// If the MCP connection fails (e.g., SSE connection died, token expired, network issue),
+    /// this method will automatically reconnect to the MCP server and retry the query once.
+    /// </para>
     /// </remarks>
     public async Task<string> QueryAsync(string userMessage, CancellationToken ct = default)
+    {
+        const int maxRetries = 2;
+        Exception? lastException = null;
+        
+        for (int attempt = 1; attempt <= maxRetries; attempt++)
+        {
+            try
+            {
+                return await ExecuteQueryAsync(userMessage, ct).ConfigureAwait(false);
+            }
+            catch (HttpRequestException ex) when (attempt < maxRetries)
+            {
+                // HTTP errors (400, 401, etc.) typically indicate a dead/stale connection
+                _logger.LogWarning(ex, "Query attempt {Attempt} failed with HTTP error, will reconnect and retry", attempt);
+                lastException = ex;
+                
+                // Force reconnect and invalidate cached agent
+                await _mcpFactory.ReconnectAsync(ct).ConfigureAwait(false);
+            }
+            catch (InvalidOperationException ex) when (attempt < maxRetries && ex.Message.Contains("disposed", StringComparison.OrdinalIgnoreCase))
+            {
+                // Client was disposed, need to reconnect
+                _logger.LogWarning(ex, "Query attempt {Attempt} failed - client disposed, will reconnect and retry", attempt);
+                lastException = ex;
+                
+                await _mcpFactory.ReconnectAsync(ct).ConfigureAwait(false);
+            }
+            catch (IOException ex) when (attempt < maxRetries)
+            {
+                // Network/stream errors indicate connection issues
+                _logger.LogWarning(ex, "Query attempt {Attempt} failed with IO error, will reconnect and retry", attempt);
+                lastException = ex;
+                
+                await _mcpFactory.ReconnectAsync(ct).ConfigureAwait(false);
+            }
+        }
+        
+        // All retries exhausted
+        _logger.LogError(lastException, "Query failed after {MaxRetries} attempts", maxRetries);
+        throw lastException ?? new InvalidOperationException("Query failed for unknown reason");
+    }
+    
+    /// <summary>
+    /// Internal method that executes the query without retry logic.
+    /// </summary>
+    private async Task<string> ExecuteQueryAsync(string userMessage, CancellationToken ct)
     {
         var agent = await GetAgentAsync(ct).ConfigureAwait(false);
 
@@ -283,11 +360,59 @@ public sealed class MedicalQueryAgent
     /// The thread accumulates all messages and tool results. For very long conversations,
     /// consider implementing conversation summarization or message pruning strategies.
     /// </para>
+    /// 
+    /// <para><b>Automatic Retry on Connection Failure:</b></para>
+    /// <para>
+    /// If the MCP connection fails, this method will reconnect and retry.
+    /// Note: On retry with an existing thread, the thread state is preserved but
+    /// the agent will be recreated with fresh MCP tools.
+    /// </para>
     /// </remarks>
     public async Task<(string Response, AgentThread Thread)> QueryWithThreadAsync(
         string userMessage,
         AgentThread? existingThread = null,
         CancellationToken ct = default)
+    {
+        const int maxRetries = 2;
+        Exception? lastException = null;
+        
+        for (int attempt = 1; attempt <= maxRetries; attempt++)
+        {
+            try
+            {
+                return await ExecuteQueryWithThreadAsync(userMessage, existingThread, ct).ConfigureAwait(false);
+            }
+            catch (HttpRequestException ex) when (attempt < maxRetries)
+            {
+                _logger.LogWarning(ex, "Query with thread attempt {Attempt} failed with HTTP error, will reconnect and retry", attempt);
+                lastException = ex;
+                await _mcpFactory.ReconnectAsync(ct).ConfigureAwait(false);
+            }
+            catch (InvalidOperationException ex) when (attempt < maxRetries && ex.Message.Contains("disposed", StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogWarning(ex, "Query with thread attempt {Attempt} failed - client disposed, will reconnect and retry", attempt);
+                lastException = ex;
+                await _mcpFactory.ReconnectAsync(ct).ConfigureAwait(false);
+            }
+            catch (IOException ex) when (attempt < maxRetries)
+            {
+                _logger.LogWarning(ex, "Query with thread attempt {Attempt} failed with IO error, will reconnect and retry", attempt);
+                lastException = ex;
+                await _mcpFactory.ReconnectAsync(ct).ConfigureAwait(false);
+            }
+        }
+        
+        _logger.LogError(lastException, "Query with thread failed after {MaxRetries} attempts", maxRetries);
+        throw lastException ?? new InvalidOperationException("Query failed for unknown reason");
+    }
+    
+    /// <summary>
+    /// Internal method that executes the query with thread without retry logic.
+    /// </summary>
+    private async Task<(string Response, AgentThread Thread)> ExecuteQueryWithThreadAsync(
+        string userMessage,
+        AgentThread? existingThread,
+        CancellationToken ct)
     {
         var agent = await GetAgentAsync(ct).ConfigureAwait(false);
 

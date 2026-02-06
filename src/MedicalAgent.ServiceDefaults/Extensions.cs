@@ -146,6 +146,30 @@ public static class Extensions
     }
 
     /// <summary>
+    /// Adds a SQL Server health check to verify database connectivity.
+    /// The health check runs a simple query to verify the connection works.
+    /// </summary>
+    /// <param name="builder">The host application builder.</param>
+    /// <param name="connectionString">The SQL Server connection string.</param>
+    /// <param name="name">The name of the health check.</param>
+    /// <returns>The host application builder for chaining.</returns>
+    public static IHostApplicationBuilder AddSqlServerHealthCheck(
+        this IHostApplicationBuilder builder, 
+        string connectionString, 
+        string name = "sqlserver")
+    {
+        builder.Services.AddHealthChecks()
+            .AddSqlServer(
+                connectionString: connectionString,
+                healthQuery: "SELECT 1",
+                name: name,
+                failureStatus: HealthStatus.Unhealthy,
+                tags: ["db", "sql", "ready"]);
+
+        return builder;
+    }
+
+    /// <summary>
     /// Maps health check endpoints to your web application.
     /// These endpoints are used by Kubernetes and other orchestrators:
     /// 

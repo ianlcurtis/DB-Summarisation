@@ -21,6 +21,9 @@
     
     <!-- MCP client for connecting to MedicalDbMcpServer -->
     <PackageReference Include="ModelContextProtocol" Version="0.6.0-preview.1" />
+    
+    <!-- Azure Identity for Entra authentication (Managed Identity in Azure) -->
+    <PackageReference Include="Azure.Identity" Version="1.13.2" />
   </ItemGroup>
 
   <ItemGroup>
