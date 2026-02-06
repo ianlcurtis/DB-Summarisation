@@ -1,6 +1,10 @@
 -- Synthetic Medical Data for Patient Medical History Database
 -- Generated for testing and development purposes
 
+-- Only insert data if the Patients table is empty
+IF NOT EXISTS (SELECT TOP 1 1 FROM Patients)
+BEGIN
+
 -- ============================================
 -- Insert Patients
 -- ============================================
@@ -327,6 +331,13 @@ VALUES
 (44, 12, 33, 'Lipid Panel', '2024-10-30', 'Optimal', NULL, NULL, 0, 'Total cholesterol 175, LDL 98');
 
 SET IDENTITY_INSERT LabResults OFF;
+
+PRINT 'Sample data inserted successfully';
+END
+ELSE
+BEGIN
+    PRINT 'Data already exists - skipping insert';
+END
 
 -- ============================================
 -- Verification Queries (Optional - Comment out for production)

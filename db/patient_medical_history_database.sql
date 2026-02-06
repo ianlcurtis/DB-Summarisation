@@ -1,4 +1,5 @@
 -- Patients table - core patient information
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Patients')
 CREATE TABLE Patients (
     PatientId INT PRIMARY KEY IDENTITY(1,1),
     FirstName NVARCHAR(100) NOT NULL,
@@ -13,8 +14,10 @@ CREATE TABLE Patients (
     CreatedAt DATETIME2 DEFAULT GETDATE(),
     UpdatedAt DATETIME2 DEFAULT GETDATE()
 );
+GO
 
 -- Medical conditions/diagnoses
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'MedicalConditions')
 CREATE TABLE MedicalConditions (
     ConditionId INT PRIMARY KEY IDENTITY(1,1),
     PatientId INT NOT NULL,
@@ -25,8 +28,10 @@ CREATE TABLE MedicalConditions (
     CreatedAt DATETIME2 DEFAULT GETDATE(),
     FOREIGN KEY (PatientId) REFERENCES Patients(PatientId)
 );
+GO
 
 -- Medications
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Medications')
 CREATE TABLE Medications (
     MedicationId INT PRIMARY KEY IDENTITY(1,1),
     PatientId INT NOT NULL,
@@ -40,8 +45,10 @@ CREATE TABLE Medications (
     CreatedAt DATETIME2 DEFAULT GETDATE(),
     FOREIGN KEY (PatientId) REFERENCES Patients(PatientId)
 );
+GO
 
 -- Allergies
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Allergies')
 CREATE TABLE Allergies (
     AllergyId INT PRIMARY KEY IDENTITY(1,1),
     PatientId INT NOT NULL,
@@ -51,8 +58,10 @@ CREATE TABLE Allergies (
     CreatedAt DATETIME2 DEFAULT GETDATE(),
     FOREIGN KEY (PatientId) REFERENCES Patients(PatientId)
 );
+GO
 
 -- Medical visits/appointments
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'MedicalVisits')
 CREATE TABLE MedicalVisits (
     VisitId INT PRIMARY KEY IDENTITY(1,1),
     PatientId INT NOT NULL,
@@ -66,8 +75,10 @@ CREATE TABLE MedicalVisits (
     CreatedAt DATETIME2 DEFAULT GETDATE(),
     FOREIGN KEY (PatientId) REFERENCES Patients(PatientId)
 );
+GO
 
 -- Lab results
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'LabResults')
 CREATE TABLE LabResults (
     LabResultId INT PRIMARY KEY IDENTITY(1,1),
     PatientId INT NOT NULL,
@@ -83,11 +94,18 @@ CREATE TABLE LabResults (
     FOREIGN KEY (PatientId) REFERENCES Patients(PatientId),
     FOREIGN KEY (VisitId) REFERENCES MedicalVisits(VisitId)
 );
+GO
 
 -- Indexes for common queries
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_MedicalConditions_PatientId')
 CREATE INDEX IX_MedicalConditions_PatientId ON MedicalConditions(PatientId);
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Medications_PatientId')
 CREATE INDEX IX_Medications_PatientId ON Medications(PatientId);
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_Allergies_PatientId')
 CREATE INDEX IX_Allergies_PatientId ON Allergies(PatientId);
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_MedicalVisits_PatientId')
 CREATE INDEX IX_MedicalVisits_PatientId ON MedicalVisits(PatientId);
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_MedicalVisits_VisitDate')
 CREATE INDEX IX_MedicalVisits_VisitDate ON MedicalVisits(VisitDate);
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name = 'IX_LabResults_PatientId')
 CREATE INDEX IX_LabResults_PatientId ON LabResults(PatientId);

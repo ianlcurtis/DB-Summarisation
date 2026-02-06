@@ -17,18 +17,49 @@ The button above deploys all required Azure infrastructure and applications auto
 | Log Analytics Workspace | Monitoring and diagnostics |
 | MCP Server Container App | Exposes patient data via MCP protocol |
 | Agent API Container App | AI agent endpoint for queries |
-
-**Automated post-deployment scripts:**
-- Database schema and sample data are created automatically
-- Container images are built from GitHub and pushed to ACR
-- Container apps are deployed with proper configuration
-- SQL database access is granted to the MCP Server managed identity
+| Web Frontend Container App | React UI for interacting with the agent |
 
 **Required parameters:**
 - `sqlAdminObjectId` - Your Entra user/group Object ID (find via `az ad signed-in-user show --query id`)
 - `sqlAdminDisplayName` - Your Entra display name
 
-**After deployment**, access the Agent API at the URL shown in the deployment outputs (`agentApiUrl`).
+**After deployment**, complete these manual steps:
+
+1. **Initialize the database** - Connect to the SQL Server and run the scripts:
+   ```bash
+   # Using sqlcmd or Azure Data Studio, connect to your SQL Server and run:
+   # db/patient_medical_history_database.sql
+   # db/patient_medical_history_data.sql
+   ```
+
+2. **Grant SQL access to MCP Server** - Run this SQL command:
+   ```sql
+   CREATE USER [medmcp-{env}-mcp] FROM EXTERNAL PROVIDER;
+   ALTER ROLE db_datareader ADD MEMBER [medmcp-{env}-mcp];
+   ```
+
+Access the web app at the URL shown in the deployment outputs (`webAppUrl`).
+
+### Deploy with Azure Developer CLI (azd)
+
+Alternatively, use `azd` for a streamlined CLI experience:
+
+```bash
+# Install azd if not already installed
+# https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd
+
+# Clone and deploy
+git clone https://github.com/ianlcurtis/DB-Summarisation.git
+cd DB-Summarisation
+azd auth login
+azd up
+```
+
+You'll be prompted for:
+- Environment name (e.g., `dev`)
+- Azure subscription
+- Azure region
+- SQL admin Object ID and display name
 
 ## Options
 Below are a few options for achieving the goal, this repo demonstrates the Agent Framework option. Detailed comments about the Agent Framework implementation can be found in the code. 

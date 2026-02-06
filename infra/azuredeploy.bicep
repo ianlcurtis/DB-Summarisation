@@ -1,18 +1,14 @@
 // ============================================================================
-// Unified Azure Deployment Template for Medical MCP Server
+// Azure Infrastructure Template for Medical MCP Server
 // ============================================================================
-// This template deploys all infrastructure and applications:
+// This template deploys the core infrastructure:
 // - Azure Container Registry (ACR)
 // - Azure SQL Server with Entra-only authentication
-// - Azure SQL Database with schema and sample data
+// - Azure SQL Database
 // - Azure OpenAI with GPT-4o deployment
 // - Container Apps Environment with Log Analytics
-// - MCP Server and Agent API Container Apps
-// 
-// Post-deployment scripts automatically:
-// - Create database schema and load sample data
-// - Build and push container images from GitHub
-// - Deploy the container applications
+//
+// Container Apps are created by azd during the deploy phase.
 // ============================================================================
 
 targetScope = 'resourceGroup'
@@ -40,12 +36,6 @@ param sqlAdminDisplayName string
 @allowed(['User', 'Group'])
 param sqlAdminType string = 'User'
 
-@description('GitHub repository URL for source code')
-param gitHubRepoUrl string = 'https://github.com/ianlcurtis/DB-Summarisation.git'
-
-@description('GitHub branch to build from')
-param gitHubBranch string = 'main'
-
 @description('GPT-4o model capacity (tokens per minute in thousands)')
 @minValue(1)
 @maxValue(100)
@@ -62,29 +52,14 @@ param tags object = {
 // ============================================================================
 
 var resourceToken = toLower(uniqueString(resourceGroup().id, baseName, environmentName))
-var acrName = '${baseName}${environmentName}acr${take(resourceToken, 6)}'
+var envNameAlphanumeric = replace(environmentName, '-', '')
+var acrName = '${baseName}${envNameAlphanumeric}acr${take(resourceToken, 6)}'
 var sqlServerName = '${baseName}-${environmentName}-sql-${take(resourceToken, 6)}'
 var databaseName = 'PatientMedicalHistory'
 var openAiAccountName = '${baseName}-${environmentName}-openai'
-var customSubDomainName = '${baseName}${environmentName}openai${take(resourceToken, 4)}'
+var customSubDomainName = '${baseName}${envNameAlphanumeric}openai${take(resourceToken, 4)}'
 var containerAppsEnvName = '${baseName}-${environmentName}-env'
 var logAnalyticsName = '${baseName}-${environmentName}-logs'
-var deploymentScriptIdentityName = '${baseName}-${environmentName}-deploy-id'
-var mcpServerAppName = '${baseName}-${environmentName}-mcp'
-var agentApiAppName = '${baseName}-${environmentName}-api'
-
-// Connection string for Entra authentication (Managed Identity)
-var sqlConnectionString = 'Server=tcp:${sqlServer.properties.fullyQualifiedDomainName},1433;Database=${databaseName};Authentication=Active Directory Default;Encrypt=True;TrustServerCertificate=False;'
-
-// ============================================================================
-// User-Assigned Managed Identity for Deployment Scripts
-// ============================================================================
-
-resource deploymentScriptIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
-  name: deploymentScriptIdentityName
-  location: location
-  tags: tags
-}
 
 // ============================================================================
 // Azure Container Registry
@@ -100,17 +75,6 @@ resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-06-01-pr
   properties: {
     adminUserEnabled: true
     publicNetworkAccess: 'Enabled'
-  }
-}
-
-// ACR Push role for deployment script identity
-resource acrPushRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(containerRegistry.id, deploymentScriptIdentity.id, 'acrpush')
-  scope: containerRegistry
-  properties: {
-    principalId: deploymentScriptIdentity.properties.principalId
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '8311e382-0749-4cb8-b61a-304f252e45ec') // AcrPush
   }
 }
 
@@ -256,311 +220,15 @@ resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2024-03-01'
 }
 
 // ============================================================================
-// Deployment Script: Initialize Database Schema and Data
-// ============================================================================
-
-resource sqlInitScript 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
-  name: '${baseName}-${environmentName}-sql-init'
-  location: location
-  tags: tags
-  kind: 'AzureCLI'
-  identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: {
-      '${deploymentScriptIdentity.id}': {}
-    }
-  }
-  properties: {
-    azCliVersion: '2.50.0'
-    timeout: 'PT30M'
-    retentionInterval: 'PT1H'
-    cleanupPreference: 'OnSuccess'
-    environmentVariables: [
-      {
-        name: 'SQL_SERVER'
-        value: sqlServer.properties.fullyQualifiedDomainName
-      }
-      {
-        name: 'SQL_DATABASE'
-        value: databaseName
-      }
-      {
-        name: 'GITHUB_REPO'
-        value: gitHubRepoUrl
-      }
-      {
-        name: 'GITHUB_BRANCH'
-        value: gitHubBranch
-      }
-      {
-        name: 'SQL_TOKEN_RESOURCE'
-        #disable-next-line no-hardcoded-env-urls
-        value: 'https://database.windows.net/'
-      }
-    ]
-    scriptContent: '''
-      #!/bin/bash
-      set -e
-
-      echo "Installing sqlcmd..."
-      curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add -
-      curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list > /etc/apt/sources.list.d/mssql-release.list
-      apt-get update
-      ACCEPT_EULA=Y apt-get install -y mssql-tools18 unixodbc-dev git
-
-      echo "Cloning repository..."
-      git clone --branch $GITHUB_BRANCH --depth 1 $GITHUB_REPO /tmp/repo
-
-      echo "Getting access token for SQL..."
-      ACCESS_TOKEN=$(az account get-access-token --resource $SQL_TOKEN_RESOURCE --query accessToken -o tsv)
-
-      echo "Running database schema script..."
-      /opt/mssql-tools18/bin/sqlcmd -S $SQL_SERVER -d $SQL_DATABASE -G -C --access-token "$ACCESS_TOKEN" -i /tmp/repo/db/patient_medical_history_database.sql
-
-      echo "Running database data script..."
-      /opt/mssql-tools18/bin/sqlcmd -S $SQL_SERVER -d $SQL_DATABASE -G -C --access-token "$ACCESS_TOKEN" -i /tmp/repo/db/patient_medical_history_data.sql
-
-      echo "Database initialization complete!"
-    '''
-  }
-  dependsOn: [
-    sqlDatabase
-    sqlFirewallRule
-  ]
-}
-
-// ============================================================================
-// Deployment Script: Build and Push Container Images
-// ============================================================================
-
-resource acrBuildScript 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
-  name: '${baseName}-${environmentName}-acr-build'
-  location: location
-  tags: tags
-  kind: 'AzureCLI'
-  identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: {
-      '${deploymentScriptIdentity.id}': {}
-    }
-  }
-  properties: {
-    azCliVersion: '2.50.0'
-    timeout: 'PT30M'
-    retentionInterval: 'PT1H'
-    cleanupPreference: 'OnSuccess'
-    environmentVariables: [
-      {
-        name: 'ACR_NAME'
-        value: containerRegistry.name
-      }
-      {
-        name: 'GITHUB_REPO'
-        value: gitHubRepoUrl
-      }
-      {
-        name: 'GITHUB_BRANCH'
-        value: gitHubBranch
-      }
-    ]
-    scriptContent: '''
-      #!/bin/bash
-      set -e
-
-      echo "Building MCP Server image in ACR..."
-      az acr build \
-        --registry $ACR_NAME \
-        --image medical-mcp-server:latest \
-        --file src/MedicalDbMcpServer/Dockerfile \
-        $GITHUB_REPO#$GITHUB_BRANCH
-
-      echo "Building Agent API image in ACR..."
-      az acr build \
-        --registry $ACR_NAME \
-        --image medical-agent-api:latest \
-        --file src/MedicalAgent.Api/Dockerfile \
-        $GITHUB_REPO#$GITHUB_BRANCH
-
-      echo "Container images built and pushed successfully!"
-    '''
-  }
-  dependsOn: [
-    acrPushRole
-  ]
-}
-
-// ============================================================================
-// MCP Server Container App
+// Container Apps
 // ============================================================================
 
 resource mcpServerApp 'Microsoft.App/containerApps@2024-03-01' = {
-  name: mcpServerAppName
+  name: '${baseName}-${environmentName}-mcp-server'
   location: location
-  tags: tags
-  identity: {
-    type: 'SystemAssigned'
-  }
-  properties: {
-    managedEnvironmentId: containerAppsEnvironment.id
-    configuration: {
-      activeRevisionsMode: 'Single'
-      ingress: {
-        external: false
-        targetPort: 8080
-        transport: 'http'
-        allowInsecure: false
-      }
-      registries: [
-        {
-          server: containerRegistry.properties.loginServer
-          username: containerRegistry.name
-          passwordSecretRef: 'acr-password'
-        }
-      ]
-      secrets: [
-        {
-          name: 'acr-password'
-          value: containerRegistry.listCredentials().passwords[0].value
-        }
-      ]
-    }
-    template: {
-      containers: [
-        {
-          name: 'mcp-server'
-          image: '${containerRegistry.properties.loginServer}/medical-mcp-server:latest'
-          resources: {
-            cpu: json('0.5')
-            memory: '1Gi'
-          }
-          env: [
-            {
-              name: 'ConnectionStrings__MedicalDb'
-              value: sqlConnectionString
-            }
-          ]
-          probes: [
-            {
-              type: 'Liveness'
-              httpGet: {
-                path: '/alive'
-                port: 8080
-              }
-              initialDelaySeconds: 10
-              periodSeconds: 30
-            }
-            {
-              type: 'Readiness'
-              httpGet: {
-                path: '/health'
-                port: 8080
-              }
-              initialDelaySeconds: 5
-              periodSeconds: 10
-            }
-          ]
-        }
-      ]
-      scale: {
-        minReplicas: 1
-        maxReplicas: 3
-        rules: [
-          {
-            name: 'http-scale'
-            http: {
-              metadata: {
-                concurrentRequests: '100'
-              }
-            }
-          }
-        ]
-      }
-    }
-  }
-  dependsOn: [
-    acrBuildScript
-    sqlInitScript
-  ]
-}
-
-// ============================================================================
-// Deployment Script: Grant SQL Access to MCP Server
-// ============================================================================
-
-resource sqlGrantScript 'Microsoft.Resources/deploymentScripts@2023-08-01' = {
-  name: '${baseName}-${environmentName}-sql-grant'
-  location: location
-  tags: tags
-  kind: 'AzureCLI'
-  identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: {
-      '${deploymentScriptIdentity.id}': {}
-    }
-  }
-  properties: {
-    azCliVersion: '2.50.0'
-    timeout: 'PT10M'
-    retentionInterval: 'PT1H'
-    cleanupPreference: 'OnSuccess'
-    environmentVariables: [
-      {
-        name: 'SQL_SERVER'
-        value: sqlServer.properties.fullyQualifiedDomainName
-      }
-      {
-        name: 'SQL_DATABASE'
-        value: databaseName
-      }
-      {
-        name: 'MCP_SERVER_PRINCIPAL_ID'
-        value: mcpServerApp.identity.principalId
-      }
-      {
-        name: 'MCP_SERVER_APP_NAME'
-        value: mcpServerAppName
-      }
-      {
-        name: 'SQL_TOKEN_RESOURCE'
-        #disable-next-line no-hardcoded-env-urls
-        value: 'https://database.windows.net/'
-      }
-    ]
-    scriptContent: '''
-      #!/bin/bash
-      set -e
-
-      echo "Installing sqlcmd..."
-      curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add -
-      curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list > /etc/apt/sources.list.d/mssql-release.list
-      apt-get update
-      ACCEPT_EULA=Y apt-get install -y mssql-tools18 unixodbc-dev
-
-      echo "Getting access token for SQL..."
-      ACCESS_TOKEN=$(az account get-access-token --resource $SQL_TOKEN_RESOURCE --query accessToken -o tsv)
-
-      echo "Granting SQL access to MCP Server managed identity..."
-      /opt/mssql-tools18/bin/sqlcmd -S $SQL_SERVER -d $SQL_DATABASE -G -C --access-token "$ACCESS_TOKEN" -Q "
-        IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = '$MCP_SERVER_APP_NAME')
-        BEGIN
-          CREATE USER [$MCP_SERVER_APP_NAME] WITH SID = CONVERT(varbinary(16), '$MCP_SERVER_PRINCIPAL_ID', 1), TYPE = E;
-        END
-        ALTER ROLE db_datareader ADD MEMBER [$MCP_SERVER_APP_NAME];
-      "
-
-      echo "SQL access granted successfully!"
-    '''
-  }
-}
-
-// ============================================================================
-// Agent API Container App
-// ============================================================================
-
-resource agentApiApp 'Microsoft.App/containerApps@2024-03-01' = {
-  name: agentApiAppName
-  location: location
-  tags: tags
+  tags: union(tags, {
+    'azd-service-name': 'mcp-server'
+  })
   identity: {
     type: 'SystemAssigned'
   }
@@ -577,7 +245,70 @@ resource agentApiApp 'Microsoft.App/containerApps@2024-03-01' = {
       registries: [
         {
           server: containerRegistry.properties.loginServer
-          username: containerRegistry.name
+          username: containerRegistry.listCredentials().username
+          passwordSecretRef: 'acr-password'
+        }
+      ]
+      secrets: [
+        {
+          name: 'acr-password'
+          value: containerRegistry.listCredentials().passwords[0].value
+        }
+        {
+          name: 'sql-connection-string'
+          value: 'Server=tcp:${sqlServer.properties.fullyQualifiedDomainName},1433;Database=${databaseName};Authentication=Active Directory Default;Encrypt=True;TrustServerCertificate=False;'
+        }
+      ]
+    }
+    template: {
+      containers: [
+        {
+          name: 'mcp-server'
+          image: 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
+          resources: {
+            cpu: json('0.5')
+            memory: '1Gi'
+          }
+          env: [
+            {
+              name: 'ConnectionStrings__MedicalDb'
+              secretRef: 'sql-connection-string'
+            }
+          ]
+        }
+      ]
+      scale: {
+        minReplicas: 0
+        maxReplicas: 3
+      }
+    }
+  }
+}
+
+resource agentApiApp 'Microsoft.App/containerApps@2024-03-01' = {
+  name: '${baseName}-${environmentName}-agent-api'
+  location: location
+  tags: union(tags, {
+    'azd-service-name': 'agent-api'
+  })
+  identity: {
+    type: 'SystemAssigned'
+  }
+  dependsOn: [mcpServerApp]
+  properties: {
+    managedEnvironmentId: containerAppsEnvironment.id
+    configuration: {
+      activeRevisionsMode: 'Single'
+      ingress: {
+        external: true
+        targetPort: 8080
+        transport: 'http'
+        allowInsecure: false
+      }
+      registries: [
+        {
+          server: containerRegistry.properties.loginServer
+          username: containerRegistry.listCredentials().username
           passwordSecretRef: 'acr-password'
         }
       ]
@@ -592,7 +323,7 @@ resource agentApiApp 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'agent-api'
-          image: '${containerRegistry.properties.loginServer}/medical-agent-api:latest'
+          image: 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
           resources: {
             cpu: json('0.5')
             memory: '1Gi'
@@ -603,62 +334,96 @@ resource agentApiApp 'Microsoft.App/containerApps@2024-03-01' = {
               value: 'Endpoint=${openAiAccount.properties.endpoint}'
             }
             {
-              name: 'Azure__OpenAI__DeploymentName'
-              value: gpt4oDeployment.name
+              name: 'OpenAi__Endpoint'
+              value: openAiAccount.properties.endpoint
+            }
+            {
+              name: 'OpenAi__DeploymentName'
+              value: 'gpt-4o'
             }
             {
               name: 'McpServer__Endpoint'
               value: 'https://${mcpServerApp.properties.configuration.ingress.fqdn}'
             }
           ]
-          probes: [
-            {
-              type: 'Liveness'
-              httpGet: {
-                path: '/alive'
-                port: 8080
-              }
-              initialDelaySeconds: 10
-              periodSeconds: 30
-            }
-            {
-              type: 'Readiness'
-              httpGet: {
-                path: '/health'
-                port: 8080
-              }
-              initialDelaySeconds: 5
-              periodSeconds: 10
-            }
-          ]
         }
       ]
       scale: {
-        minReplicas: 1
-        maxReplicas: 5
-        rules: [
-          {
-            name: 'http-scale'
-            http: {
-              metadata: {
-                concurrentRequests: '50'
-              }
-            }
-          }
-        ]
+        minReplicas: 0
+        maxReplicas: 3
       }
     }
   }
 }
 
-// Cognitive Services OpenAI User role for Agent API
-resource openAiUserRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(openAiAccount.id, agentApiApp.id, 'openaiuser')
+resource webApp 'Microsoft.App/containerApps@2024-03-01' = {
+  name: '${baseName}-${environmentName}-web'
+  location: location
+  tags: union(tags, {
+    'azd-service-name': 'web'
+  })
+  dependsOn: [agentApiApp]
+  properties: {
+    managedEnvironmentId: containerAppsEnvironment.id
+    configuration: {
+      activeRevisionsMode: 'Single'
+      ingress: {
+        external: true
+        targetPort: 80
+        transport: 'http'
+        allowInsecure: false
+      }
+      registries: [
+        {
+          server: containerRegistry.properties.loginServer
+          username: containerRegistry.listCredentials().username
+          passwordSecretRef: 'acr-password'
+        }
+      ]
+      secrets: [
+        {
+          name: 'acr-password'
+          value: containerRegistry.listCredentials().passwords[0].value
+        }
+      ]
+    }
+    template: {
+      containers: [
+        {
+          name: 'web'
+          image: 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
+          resources: {
+            cpu: json('0.25')
+            memory: '0.5Gi'
+          }
+          env: [
+            {
+              name: 'API_URL'
+              value: 'https://${agentApiApp.properties.configuration.ingress.fqdn}'
+            }
+          ]
+        }
+      ]
+      scale: {
+        minReplicas: 0
+        maxReplicas: 3
+      }
+    }
+  }
+}
+
+// ============================================================================
+// Role Assignments
+// ============================================================================
+
+// Cognitive Services OpenAI User role for Agent API to access Azure OpenAI
+resource agentApiOpenAiRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(openAiAccount.id, agentApiApp.id, 'CognitiveServicesOpenAIUser')
   scope: openAiAccount
   properties: {
     principalId: agentApiApp.identity.principalId
     principalType: 'ServicePrincipal'
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd') // Cognitive Services OpenAI User
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd')
   }
 }
 
@@ -675,8 +440,14 @@ output acrLoginServer string = containerRegistry.properties.loginServer
 @description('SQL Server fully qualified domain name')
 output sqlServerFqdn string = sqlServer.properties.fullyQualifiedDomainName
 
+@description('SQL Server name')
+output sqlServerName string = sqlServer.name
+
 @description('SQL Database name')
 output sqlDatabaseName string = sqlDatabase.name
+
+@description('SQL connection string (Entra auth)')
+output sqlConnectionString string = 'Server=tcp:${sqlServer.properties.fullyQualifiedDomainName},1433;Database=${databaseName};Authentication=Active Directory Default;Encrypt=True;TrustServerCertificate=False;'
 
 @description('Azure OpenAI endpoint')
 output openAiEndpoint string = openAiAccount.properties.endpoint
@@ -687,17 +458,18 @@ output openAiDeploymentName string = gpt4oDeployment.name
 @description('Container Apps Environment name')
 output containerAppsEnvName string = containerAppsEnvironment.name
 
-@description('MCP Server internal FQDN')
-output mcpServerFqdn string = mcpServerApp.properties.configuration.ingress.fqdn
+@description('Container Apps Environment ID')
+output containerAppsEnvId string = containerAppsEnvironment.id
 
-@description('Agent API external FQDN')
-output agentApiFqdn string = agentApiApp.properties.configuration.ingress.fqdn
-
-@description('Agent API URL')
-output agentApiUrl string = 'https://${agentApiApp.properties.configuration.ingress.fqdn}'
-
-@description('MCP Server principal ID (grant SQL access)')
-output mcpServerPrincipalId string = mcpServerApp.identity.principalId
-
-@description('Deployment status')
-output deploymentStatus string = 'Complete! Access the Agent API at https://${agentApiApp.properties.configuration.ingress.fqdn}'
+// azd-compatible outputs (AZURE_ prefix for environment variables)
+output AZURE_CONTAINER_REGISTRY_ENDPOINT string = containerRegistry.properties.loginServer
+output AZURE_CONTAINER_REGISTRY_NAME string = containerRegistry.name
+output AZURE_CONTAINER_APPS_ENVIRONMENT_NAME string = containerAppsEnvironment.name
+output AZURE_CONTAINER_APPS_ENVIRONMENT_ID string = containerAppsEnvironment.id
+output AZURE_OPENAI_ENDPOINT string = openAiAccount.properties.endpoint
+output AZURE_SQL_SERVER string = sqlServer.properties.fullyQualifiedDomainName
+output AZURE_SQL_DATABASE string = databaseName
+output AZURE_WEB_URL string = 'https://${webApp.properties.configuration.ingress.fqdn}'
+output AZURE_AGENT_API_URL string = 'https://${agentApiApp.properties.configuration.ingress.fqdn}'
+output AZURE_MCP_SERVER_URL string = 'https://${mcpServerApp.properties.configuration.ingress.fqdn}'
+output AZURE_MCP_SERVER_APP_NAME string = mcpServerApp.name
